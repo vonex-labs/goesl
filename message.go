@@ -25,6 +25,8 @@ type Message struct {
 	Headers map[string]string
 	Body    []byte
 
+	EventItems map[string]string
+
 	r  *bufio.Reader
 	tr *textproto.Reader
 }

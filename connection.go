@@ -221,6 +221,42 @@ func (c *SocketConnection) Handle() {
 	c.Close()
 }
 
+// HandleManual - Will handle new messages and close connection when there are no messages left to process
+func (c *SocketConnection) HandleManual(close chan bool) {
+
+	rbuf := bufio.NewReaderSize(c, ReadBufferSize)
+
+	go func() {
+		for {
+			msg, err := newMessage(rbuf, true)
+
+			if err != nil {
+				c.err <- err
+				close <- true
+				break
+			}
+
+			close <- true
+			c.m <- msg
+		}
+	}()
+
+	<-close
+}
+
+func (c *SocketConnection) SendBlock(cmd string) (err error, msg *Message) {
+	c.Send(cmd)
+	closeSocket := make(chan bool)
+	c.HandleManual(closeSocket)
+
+	msg, err = c.ReadMessage()
+	if err != nil {
+		return err, msg
+	}
+
+	return nil, msg
+}
+
 // Close - Will close down net connection and return error if error happen
 func (c *SocketConnection) Close() error {
 	if err := c.Conn.Close(); err != nil {

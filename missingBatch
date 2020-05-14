@@ -1,0 +1,60 @@
+diff --git a/connection.go b/connection.go
+index 879e36b..72a3987 100644
+--- a/connection.go
++++ b/connection.go
+@@ -221,6 +221,42 @@ func (c *SocketConnection) Handle() {
+ 	c.Close()
+ }
+ 
++// HandleManual - Will handle new messages and close connection when there are no messages left to process
++func (c *SocketConnection) HandleManual(close chan bool) {
++
++	rbuf := bufio.NewReaderSize(c, ReadBufferSize)
++
++	go func() {
++		for {
++			msg, err := newMessage(rbuf, true)
++
++			if err != nil {
++				c.err <- err
++				close <- true
++				break
++			}
++
++			close <- true
++			c.m <- msg
++		}
++	}()
++
++	<-close
++}
++
++func (c *SocketConnection) SendBlock(cmd string) (err error, msg *Message) {
++	c.Send(cmd)
++	closeSocket := make(chan bool)
++	c.HandleManual(closeSocket)
++
++	msg, err = c.ReadMessage()
++	if err != nil {
++		return err, msg
++	}
++
++	return nil, msg
++}
++
+ // Close - Will close down net connection and return error if error happen
+ func (c *SocketConnection) Close() error {
+ 	if err := c.Conn.Close(); err != nil {
+diff --git a/message.go b/message.go
+index a6eec36..a42d10f 100644
+--- a/message.go
++++ b/message.go
+@@ -25,6 +25,8 @@ type Message struct {
+ 	Headers map[string]string
+ 	Body    []byte
+ 
++	EventItems map[string]string
++
+ 	r  *bufio.Reader
+ 	tr *textproto.Reader
+ }
